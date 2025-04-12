@@ -25,7 +25,7 @@ const Header = () => {
               alt="Sensai Logo"
               width={200}
               height={60}
-              className="h-13 w-auto object-contain"
+              className="h-11 w-auto object-contain"
             />
           </Link>
         </div>

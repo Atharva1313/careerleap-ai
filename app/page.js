@@ -1,11 +1,12 @@
-
+"use client";
 import { Button } from "@/components/ui/button";
+import HeroSection from "@/components/hero";
 export default function Home() {
   return (
-   <div>Atharva
+   <div>
+    <div className="grid-background"></div>
 
-    <br />
-    <button className="bg-red-500 text-white">Click Me</button>
+    <HeroSection/>
    </div>
 
   );
