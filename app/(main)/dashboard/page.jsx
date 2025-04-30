@@ -1,25 +1,22 @@
-
-
 import { getIndustryInsights } from "@/actions/dashboard";
+import DashboardView from "./_component/dashboard-view";
 import { getUserOnboardingStatus } from "@/actions/user";
-import { LayoutDashboard } from "lucide-react";
 import { redirect } from "next/navigation";
 
-
-
-const IndustaryInsightPage= async() => {
+export default async function DashboardPage() {
   const { isOnboarded } = await getUserOnboardingStatus();
-  const insights=await getIndustryInsights();
 
+  // If not onboarded, redirect to onboarding page
+  // Skip this check if already on the onboarding page
   if (!isOnboarded) {
     redirect("/onboarding");
   }
+
+  const insights = await getIndustryInsights();
+
   return (
     <div className="container mx-auto">
       <DashboardView insights={insights} />
     </div>
-  )
+  );
 }
-
-export default IndustaryInsightPage
-
