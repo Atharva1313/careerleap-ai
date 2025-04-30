@@ -1,7 +1,9 @@
 "use server"
 import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
-import { DemandLevel, MarketOutlook,  } from "@prisma/client";
+
+
+import { generateAIInsights } from "./dashboard";
 
 export async function updateUser(data) {
 const {userId}=await auth();
@@ -24,23 +26,18 @@ try {
         },
     })
 
-
     if(!industryInsight) {
-        industryInsight = await tx.industryInsight.create({
-            data: {
-                industry: data.industry,
-                salaryRanges:[],
-                growthRate:0,
-                demandLevel: "MEDIUM",
-                topSkills:[],
-                marketOutlook: "Neutral",
-                keyTrends:[],
-                recommendedSkills :[],
-                nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-              
-            },
-        });
+          const insight = await generateAIInsights(data.industry);
+          console.log("insight:", insight);
+          industryInsight=await db.industryInsight.create({
+            data:{
+              industry:data.industry,
+               ...insight,
+               nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+               }
+       });
     }
+
     //update the user
     const updatedUser = await tx.user.update({
         where: {
@@ -53,7 +50,7 @@ try {
           skills: data.skills,
         },
       });
-
+    console.log("updatedUser:", updatedUser);
       return { updatedUser, industryInsight };
     },
     {

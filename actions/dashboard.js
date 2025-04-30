@@ -18,7 +18,7 @@ const promt=`
   "growthRate": number,
   "demandLevel": "High" | "Medium" | "Low",
   "topSkills": ["skill1", "skill2"],
-  "marketOutlook": "Positive" | "Neutral" | "Negative",
+  "marketOutlook": "POSITIVE" | "NEUTRAL" | "NEGATIVE", 
   "keyTrends": ["trend1", "trend2"],
   "recommendedSkills": ["skill1", "skill2"]
 }
@@ -29,7 +29,12 @@ Growth rate should be a percentage.
 Include at least 5 skills and trends.
 `
 const result=await model.generateContent(promt)
-const
+const response=result.response;
+const text =response.text()
+
+const cleanedTest = text.replace(/```(?:json)?\n?/g, "").trim();
+return JSON.parse(cleanedTest);
+
 };
 
 export async function getIndustryInsights() {
