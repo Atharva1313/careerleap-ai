@@ -1,18 +1,21 @@
+
+
 import { getUserOnboardingStatus } from "@/actions/user";
 import { redirect } from "next/navigation";
 
 
-const IndustryInsightPage = async() => {
 
-   const {isOnborded}= await getUserOnboardingStatus();
-   if(!isOnborded) {
-      redirect("/onbording") ;
-    }
+const IndustaryInsightPage= async() => {
+  const { isOnboarded } = await getUserOnboardingStatus();
+  if (!isOnboarded) {
+    redirect("/onboarding");
+  }
   return (
     <div>
-      
+      IdustaryInsight
     </div>
   )
 }
 
-export default IndustryInsightPage
+export default IndustaryInsightPage
+

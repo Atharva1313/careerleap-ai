@@ -17,7 +17,7 @@ experience:z.string().transform((value) => parseInt(value, 10))
     .min(0, "Experience must be a positive number")
     .max(50, "Experience cannot exceed 50 years")
 ),
-skills:z.string().transform((value) => 
+skills:z.string().transform((val) => 
     val
       ?val
       .split(",")
