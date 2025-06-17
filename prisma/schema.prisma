@@ -82,11 +82,11 @@ model IndustryInsight {
   
   // Industry trends
   growthRate    Float     // Industry growth rate
-  demandLevel   DemandLevel    // "High", "Medium", "Low"
+  demandLevel   String    // "High", "Medium", "Low"
   topSkills     String[]  // Most in-demand skills
   
   // Market conditions
-  marketOutlook MarketOutlook    // "Positive", "Neutral", "Negative"
+  marketOutlook String    // "Positive", "Neutral", "Negative"
   keyTrends     String[]  // Array of current industry trends
   
   // Learning suggestions
@@ -96,17 +96,4 @@ model IndustryInsight {
   nextUpdate    DateTime  // Scheduled update time
 
   @@index([industry])
-}
-
-enum DemandLevel{
-  High
-  MEDIUM
-  LOW
-}
-
-
-enum MarketOutlook{
-  POSITIVE 
-  NEUTRAL
-  NEGATIVE
 }
