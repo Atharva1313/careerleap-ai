@@ -46,7 +46,7 @@ const HeroSection = () => {
               Get Started
             </Button>
           </Link>
-          <Link href="https://www.youtube.com/@sheryians">
+          <Link href="https://github.com/Atharva1313/careerleap-ai">
             <Button size="lg" variant="outline" className="px-8">
               Watch Demo
             </Button>

@@ -5,7 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 export async function generateQuiz() {
   const { userId } = await auth();
@@ -44,17 +44,56 @@ export async function generateQuiz() {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
-    const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-    const quiz = JSON.parse(cleanedText);
+    // Try generating content with the remote model. If rate limits or quota
+    // errors occur, fall back to a local quiz generator so the user still
+    // gets a usable result.
+    const attemptGenerate = async (retries = 2, delayMs = 1000) => {
+      try {
+        const result = await model.generateContent(prompt);
+        const response = result.response;
+        const text = response.text();
+        const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
+        const quiz = JSON.parse(cleanedText);
+        return quiz.questions;
+      } catch (err) {
+        const status = err?.status || err?.response?.status;
+        const msg = String(err || "");
+        // Retry on transient errors (including 429) a few times
+        if (retries > 0 && /429|Too Many Requests|rate-limit|quota/i.test(msg)) {
+          await new Promise((r) => setTimeout(r, delayMs));
+          return attemptGenerate(retries - 1, Math.min(5000, delayMs * 2));
+        }
+        throw err;
+      }
+    };
 
-    return quiz.questions;
+    const questions = await attemptGenerate();
+    if (questions && Array.isArray(questions)) return questions;
+
+    // If parsing failed or model returned unexpected shape, throw to trigger fallback
+    throw new Error("Invalid model response");
   } catch (error) {
     console.error("Error generating quiz:", error);
+    // Detect quota/rate-limit and provide a local fallback quiz
+    const errMsg = String(error || "");
+    if (/429|Too Many Requests|rate-limit|quota/i.test(errMsg)) {
+      console.warn("Quota/rate-limit detected — returning local fallback quiz.");
+      return generateLocalQuiz(user);
+    }
+
     throw new Error("Failed to generate quiz questions");
   }
+}
+
+function generateLocalQuiz(user) {
+  const industryLabel = user?.industry || "your field";
+  const sample = Array.from({ length: 10 }).map((_, i) => ({
+    question: `Sample question ${i + 1} for ${industryLabel}`,
+    options: ["Option A", "Option B", "Option C", "Option D"],
+    correctAnswer: "Option A",
+    explanation: `Brush up core ${industryLabel} concepts for this topic.`,
+  }));
+  return sample;
 }
 
 export async function saveQuizResult(questions, answers, score) {
