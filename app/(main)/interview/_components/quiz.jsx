@@ -26,6 +26,8 @@ export default function Quiz() {
     loading: generatingQuiz,
     fn: generateQuizFn,
     data: quizData,
+    error: generateError,
+    setData: setQuizData,
   } = useFetch(generateQuiz);
 
   const {
@@ -37,7 +39,9 @@ export default function Quiz() {
 
   useEffect(() => {
     if (quizData) {
+      setCurrentQuestion(0);
       setAnswers(new Array(quizData.length).fill(null));
+      setShowExplanation(false);
     }
   }, [quizData]);
 
@@ -80,8 +84,9 @@ export default function Quiz() {
     setCurrentQuestion(0);
     setAnswers([]);
     setShowExplanation(false);
-    generateQuizFn();
     setResultData(null);
+    setQuizData(undefined);
+    generateQuizFn();
   };
 
   if (generatingQuiz) {
@@ -94,6 +99,27 @@ export default function Quiz() {
       <div className="mx-2">
         <QuizResult result={resultData} onStartNew={startNewQuiz} />
       </div>
+    );
+  }
+
+  if (generateError && !quizData) {
+    return (
+      <Card className="mx-2 border border-red-300">
+        <CardHeader>
+          <CardTitle className="text-destructive">Unable to generate quiz</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-destructive">{generateError.message}</p>
+          <p className="text-muted-foreground mt-2">
+            Please try again later or check your Gemini API quota.
+          </p>
+        </CardContent>
+        <CardFooter>
+          <Button onClick={generateQuizFn} className="w-full">
+            Retry
+          </Button>
+        </CardFooter>
+      </Card>
     );
   }
 

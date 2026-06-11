@@ -22,15 +22,21 @@ export async function generateQuiz() {
   if (!user) throw new Error("User not found");
 
   const prompt = `
-    Generate 10 technical interview questions for a ${
+    Generate 10 COMPLETELY DIFFERENT technical interview questions for a ${
       user.industry
     } professional${
     user.skills?.length ? ` with expertise in ${user.skills.join(", ")}` : ""
   }.
-    
-    Each question should be multiple choice with 4 options.
-    
-    Return the response in this JSON format only, no additional text:
+
+    CRITICAL REQUIREMENTS:
+    - Each question MUST cover a completely different topic or concept
+    - Do NOT repeat similar questions
+    - Do NOT ask variations of the same question
+    - Cover diverse areas: basics, advanced concepts, real-world scenarios, troubleshooting, design, performance, security, best practices, tools, and methodologies
+    - Each question must be unique in topic AND wording
+    - Each question must have 4 distinct, non-overlapping options
+
+    Return the response in this JSON format only, and do not include any additional text:
     {
       "questions": [
         {
@@ -43,41 +49,58 @@ export async function generateQuiz() {
     }
   `;
 
-  try {
-    // Try generating content with the remote model. If rate limits or quota
-    // errors occur, fall back to a local quiz generator so the user still
-    // gets a usable result.
-    const attemptGenerate = async (retries = 2, delayMs = 1000) => {
-      try {
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const text = response.text();
-        const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-        const quiz = JSON.parse(cleanedText);
-        return quiz.questions;
-      } catch (err) {
-        const status = err?.status || err?.response?.status;
-        const msg = String(err || "");
-        // Retry on transient errors (including 429) a few times
-        if (retries > 0 && /429|Too Many Requests|rate-limit|quota/i.test(msg)) {
-          await new Promise((r) => setTimeout(r, delayMs));
-          return attemptGenerate(retries - 1, Math.min(5000, delayMs * 2));
-        }
-        throw err;
+  const cleanQuizText = (text) => text.replace(/```(?:json)?\n?/g, "").trim();
+
+  const attemptGenerate = async (retries = 2, delayMs = 1000) => {
+    try {
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const text = response.text();
+      const cleanedText = cleanQuizText(text);
+      const quiz = JSON.parse(cleanedText);
+      return quiz.questions;
+    } catch (err) {
+      const status = err?.status || err?.response?.status;
+      const msg = String(err || "");
+      // Retry on transient errors (including 429) a few times
+      if (retries > 0 && /429|Too Many Requests|rate-limit|quota/i.test(msg)) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        return attemptGenerate(retries - 1, Math.min(5000, delayMs * 2));
       }
-    };
+      throw err;
+    }
+  };
 
-    const questions = await attemptGenerate();
-    if (questions && Array.isArray(questions)) return questions;
-
-    // If parsing failed or model returned unexpected shape, throw to trigger fallback
+  const generateValidQuiz = async () => {
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const questions = await attemptGenerate();
+      const normalizedQuestions = normalizeQuizQuestions(questions);
+      if (normalizedQuestions && normalizedQuestions.length === 10) {
+        return normalizedQuestions;
+      }
+      console.warn(
+        `Quiz generation attempt ${attempt} returned invalid or duplicate questions.`
+      );
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
     throw new Error("Invalid model response");
+  };
+
+  try {
+    const questions = await generateValidQuiz();
+    return questions;
   } catch (error) {
     console.error("Error generating quiz:", error);
-    // Detect quota/rate-limit and provide a local fallback quiz
     const errMsg = String(error || "");
     if (/429|Too Many Requests|rate-limit|quota/i.test(errMsg)) {
       console.warn("Quota/rate-limit detected — returning local fallback quiz.");
+      return generateLocalQuiz(user);
+    }
+
+    if (/Invalid model response/i.test(errMsg)) {
+      console.warn("Invalid model response detected — returning local fallback quiz.");
       return generateLocalQuiz(user);
     }
 
@@ -85,15 +108,122 @@ export async function generateQuiz() {
   }
 }
 
+function normalizeQuizQuestions(questions) {
+  if (!Array.isArray(questions)) return null;
+
+  const uniqueQuestions = [];
+  const seen = new Set();
+  const questionStarts = new Set();
+
+  for (const item of questions) {
+    if (
+      item &&
+      typeof item.question === "string" &&
+      Array.isArray(item.options) &&
+      item.options.length === 4 &&
+      item.options.every((o) => typeof o === "string") &&
+      typeof item.correctAnswer === "string" &&
+      typeof item.explanation === "string"
+    ) {
+      const trimmedQuestion = item.question.trim();
+      const trimmedOptions = item.options.map((option) => option.trim());
+      const trimmedCorrectAnswer = item.correctAnswer.trim();
+      const trimmedExplanation = item.explanation.trim();
+
+      if (
+        !trimmedQuestion ||
+        seen.has(trimmedQuestion) ||
+        !trimmedOptions.every((option) => option) ||
+        !trimmedCorrectAnswer ||
+        !trimmedOptions.includes(trimmedCorrectAnswer) ||
+        !trimmedExplanation
+      ) {
+        continue;
+      }
+
+      // Check for semantic similarity: questions starting with same phrase are likely duplicates
+      const questionStart = trimmedQuestion.split("?")[0].substring(0, 30).toLowerCase();
+      if (questionStarts.has(questionStart)) {
+        continue;
+      }
+
+      seen.add(trimmedQuestion);
+      questionStarts.add(questionStart);
+      uniqueQuestions.push({
+        question: trimmedQuestion,
+        options: trimmedOptions,
+        correctAnswer: trimmedCorrectAnswer,
+        explanation: trimmedExplanation,
+      });
+    }
+  }
+
+  return uniqueQuestions.length ? uniqueQuestions : null;
+}
+
 function generateLocalQuiz(user) {
   const industryLabel = user?.industry || "your field";
-  const sample = Array.from({ length: 10 }).map((_, i) => ({
-    question: `Sample question ${i + 1} for ${industryLabel}`,
-    options: ["Option A", "Option B", "Option C", "Option D"],
-    correctAnswer: "Option A",
-    explanation: `Brush up core ${industryLabel} concepts for this topic.`,
-  }));
-  return sample;
+  const questionsData = [
+    {
+      topic: "fundamental concepts",
+      q: "What is the core principle behind",
+      opts: ["solid design", "rapid prototyping", "iterative feedback", "agile methodology"],
+    },
+    {
+      topic: "design patterns",
+      q: "Which design pattern is best for",
+      opts: ["singleton pattern", "factory pattern", "observer pattern", "decorator pattern"],
+    },
+    {
+      topic: "performance optimization",
+      q: "How would you improve performance in",
+      opts: ["caching", "lazy loading", "compression", "pagination"],
+    },
+    {
+      topic: "system architecture",
+      q: "What architectural approach works best for",
+      opts: ["microservices", "monolithic", "serverless", "distributed systems"],
+    },
+    {
+      topic: "security best practices",
+      q: "Which security measure is critical for",
+      opts: ["encryption", "authentication", "rate limiting", "input validation"],
+    },
+    {
+      topic: "testing strategies",
+      q: "What testing approach ensures quality for",
+      opts: ["unit testing", "integration testing", "end-to-end testing", "performance testing"],
+    },
+    {
+      topic: "data handling",
+      q: "How should you manage data in",
+      opts: ["relational databases", "NoSQL databases", "caching layers", "data warehouses"],
+    },
+    {
+      topic: "deployment",
+      q: "What deployment strategy is recommended for",
+      opts: ["blue-green", "canary", "rolling updates", "feature flags"],
+    },
+    {
+      topic: "algorithms",
+      q: "Which algorithm is most suitable for",
+      opts: ["sorting", "searching", "hashing", "graph traversal"],
+    },
+    {
+      topic: "troubleshooting",
+      q: "What is the best approach to debugging",
+      opts: ["logging", "breakpoints", "profiling", "monitoring"],
+    },
+  ];
+
+  return questionsData.map((item, i) => {
+    return {
+      question: `${item.q} ${item.topic} in ${industryLabel}?`,
+      options: item.opts,
+      correctAnswer: item.opts[0],
+      explanation: `Best practice for ${item.topic} in ${industryLabel}: ${item.opts[0]} is a key approach.`,
+    };
+  });
 }
 
 export async function saveQuizResult(questions, answers, score) {
