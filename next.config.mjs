@@ -7,8 +7,12 @@ const nextConfig = {
           hostname: "randomuser.me",
           pathname: "/**", // Allow all paths from this domain
         },
+        {
+          protocol: "https",
+          hostname: "images.unsplash.com",
+          pathname: "/**",
+        },
       ],
-      domains: ["images.unsplash.com"], // Allow simpler domain-based configuration
     },
   };
   

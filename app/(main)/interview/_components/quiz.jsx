@@ -157,7 +157,7 @@ export default function Quiz() {
         <p className="text-lg font-medium">{question.question}</p>
         <RadioGroup
           onValueChange={handleAnswer}
-          value={answers[currentQuestion]}
+          value={answers[currentQuestion] ?? ""}
           className="space-y-2"
         >
           {question.options.map((option, index) => (

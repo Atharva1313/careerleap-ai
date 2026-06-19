@@ -23,7 +23,7 @@ import useFetch from "@/hooks/use-fetch";
 import { useUser } from "@clerk/nextjs";
 import { entriesToMarkdown } from "@/app/lib/helper";
 import { resumeSchema } from "@/app/lib/schema";
-import html2pdf from "html2pdf.js/dist/html2pdf.min.js";
+// html2pdf references `self`/window; load it dynamically inside the client-only handler
 
 export default function ResumeBuilder({ initialContent }) {
   const [activeTab, setActiveTab] = useState("edit");
@@ -124,6 +124,9 @@ export default function ResumeBuilder({ initialContent }) {
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       };
 
+      // Dynamically import to avoid server-side evaluation (where `self` is undefined)
+      const html2pdfModule = await import("html2pdf.js/dist/html2pdf.min.js");
+      const html2pdf = html2pdfModule.default || html2pdfModule;
       await html2pdf().set(opt).from(element).save();
     } catch (error) {
       console.error("PDF generation error:", error);

@@ -51,6 +51,11 @@ export async function generateQuiz() {
 
   const cleanQuizText = (text) => text.replace(/```(?:json)?\n?/g, "").trim();
 
+  const isRateLimitError = (err) => {
+    const msg = String(err || "");
+    return /429|Too Many Requests|rate-limit|quota/i.test(msg);
+  };
+
   const attemptGenerate = async (retries = 2, delayMs = 1000) => {
     try {
       const result = await model.generateContent(prompt);
@@ -60,12 +65,17 @@ export async function generateQuiz() {
       const quiz = JSON.parse(cleanedText);
       return quiz.questions;
     } catch (err) {
-      const status = err?.status || err?.response?.status;
       const msg = String(err || "");
-      // Retry on transient errors (including 429) a few times
-      if (retries > 0 && /429|Too Many Requests|rate-limit|quota/i.test(msg)) {
-        await new Promise((r) => setTimeout(r, delayMs));
-        return attemptGenerate(retries - 1, Math.min(5000, delayMs * 2));
+      if (isRateLimitError(err)) {
+        if (retries > 0) {
+          await new Promise((r) => setTimeout(r, delayMs));
+          return attemptGenerate(retries - 1, Math.min(5000, delayMs * 2));
+        }
+
+        console.warn(
+          "Gemini API quota or rate limit reached. Using local fallback quiz."
+        );
+        return generateLocalQuiz(user);
       }
       throw err;
     }
@@ -92,18 +102,14 @@ export async function generateQuiz() {
     const questions = await generateValidQuiz();
     return questions;
   } catch (error) {
-    console.error("Error generating quiz:", error);
     const errMsg = String(error || "");
-    if (/429|Too Many Requests|rate-limit|quota/i.test(errMsg)) {
-      console.warn("Quota/rate-limit detected — returning local fallback quiz.");
-      return generateLocalQuiz(user);
-    }
 
     if (/Invalid model response/i.test(errMsg)) {
       console.warn("Invalid model response detected — returning local fallback quiz.");
       return generateLocalQuiz(user);
     }
 
+    console.error("Error generating quiz:", error);
     throw new Error("Failed to generate quiz questions");
   }
 }
@@ -274,7 +280,7 @@ export async function saveQuizResult(questions, answers, score) {
       improvementTip = tipResult.response.text().trim();
       console.log(improvementTip);
     } catch (error) {
-      console.error("Error generating improvement tip:", error);
+      console.warn("Error generating improvement tip:", error);
       // Continue without improvement tip if generation fails
     }
   }
